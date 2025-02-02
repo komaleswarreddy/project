@@ -36,7 +36,7 @@ const createSendToken = (user, statusCode, res) => {
   const token = jwt.sign(
     { id: user._id },
     process.env.JWT_SECRET,
-    { expiresIn: process.env.JWT_EXPIRES_IN }
+    { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
   );
 
   // Remove password from output
@@ -51,57 +51,51 @@ const createSendToken = (user, statusCode, res) => {
   });
 };
 
+// Register new user
 exports.register = async (req, res) => {
   try {
-    // Handle file upload
     upload(req, res, async function(err) {
-      if (err instanceof multer.MulterError) {
-        return res.status(400).json({
-          status: 'error',
-          message: 'File upload error: ' + err.message
-        });
-      } else if (err) {
+      if (err) {
         return res.status(400).json({
           status: 'error',
           message: err.message
         });
       }
 
-      const { name, email, password } = req.body;
+      const { username, name, email, password } = req.body;
 
       // Check if user already exists
-      const existingUser = await User.findOne({ email });
+      const existingUser = await User.findOne({ 
+        $or: [{ email }, { username }] 
+      });
+
       if (existingUser) {
         return res.status(400).json({
           status: 'error',
-          message: 'User already exists with this email'
+          message: 'Email or username already exists'
         });
       }
 
-      // Create new user
-      const userData = {
+      // Create user
+      const user = await User.create({
+        username,
         name,
         email,
-        password
-      };
+        password,
+        profilePicture: req.file ? `/uploads/profiles/${req.file.filename}` : undefined
+      });
 
-      // Add profile picture if uploaded
-      if (req.file) {
-        userData.profilePicture = `/uploads/profiles/${req.file.filename}`;
-      }
-
-      const user = await User.create(userData);
       createSendToken(user, 201, res);
     });
   } catch (error) {
-    console.error('Registration error:', error);
     res.status(400).json({
       status: 'error',
-      message: error.message || 'Error creating user'
+      message: error.message
     });
   }
 };
 
+// Login user
 exports.login = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -116,10 +110,20 @@ exports.login = async (req, res) => {
 
     // Check if user exists && password is correct
     const user = await User.findOne({ email }).select('+password');
-    if (!user || !(await user.comparePassword(password))) {
+    
+    if (!user) {
       return res.status(401).json({
         status: 'error',
-        message: 'Incorrect email or password'
+        message: 'Invalid email or password'
+      });
+    }
+
+    const isPasswordCorrect = await user.comparePassword(password);
+    
+    if (!isPasswordCorrect) {
+      return res.status(401).json({
+        status: 'error',
+        message: 'Invalid email or password'
       });
     }
 
@@ -133,10 +137,10 @@ exports.login = async (req, res) => {
   }
 };
 
+// Get current user
 exports.getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.id);
-    
     res.status(200).json({
       status: 'success',
       data: {
@@ -144,18 +148,19 @@ exports.getMe = async (req, res) => {
       }
     });
   } catch (error) {
-    console.error('Get user error:', error);
     res.status(400).json({
       status: 'error',
-      message: error.message || 'Error getting user data'
+      message: error.message
     });
   }
 };
 
+// Protect routes middleware
 exports.protect = async (req, res, next) => {
   try {
-    // 1) Getting token
     let token;
+    
+    // Get token from Authorization header
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer')) {
       token = req.headers.authorization.split(' ')[1];
     }
@@ -167,10 +172,10 @@ exports.protect = async (req, res, next) => {
       });
     }
 
-    // 2) Verify token
+    // Verify token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-    // 3) Check if user still exists
+    // Check if user still exists
     const user = await User.findById(decoded.id);
     if (!user) {
       return res.status(401).json({
@@ -179,14 +184,13 @@ exports.protect = async (req, res, next) => {
       });
     }
 
-    // GRANT ACCESS TO PROTECTED ROUTE
+    // Grant access to protected route
     req.user = user;
     next();
   } catch (error) {
-    console.error('Auth protection error:', error);
-    res.status(401).json({
+    return res.status(401).json({
       status: 'error',
-      message: 'Invalid token or authorization error'
+      message: 'Invalid token. Please log in again.'
     });
   }
 };

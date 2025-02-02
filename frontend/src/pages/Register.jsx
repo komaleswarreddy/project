@@ -6,6 +6,7 @@ import grayImage from '../assets/gray.jpg';
 
 export default function Register() {
   const [formData, setFormData] = useState({
+    username: '',
     name: '',
     email: '',
     password: '',
@@ -24,16 +25,16 @@ export default function Register() {
     e.preventDefault();
     setLoading(true);
 
-    const result = await register(formData.name, formData.email, formData.password);
-    
-    if (result.success) {
-      toast.success('Registration successful!');
-      navigate('/');
-    } else {
-      toast.error(result.error);
+    try {
+      const result = await register(formData);
+      if (result) {
+        navigate('/');
+      }
+    } catch (error) {
+      console.error('Registration error:', error);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
@@ -91,6 +92,18 @@ export default function Register() {
 
           <form onSubmit={handleSubmit} className="mt-8 space-y-6">
             <div className="space-y-4">
+              <div>
+                <input
+                  type="text"
+                  name="username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  placeholder="Username"
+                  className="w-full px-4 py-3 rounded-lg bg-gray-800 border border-gray-700 text-white placeholder-gray-400 focus:outline-none focus:border-purple-500 focus:ring-1 focus:ring-purple-500 transition-all duration-200"
+                  required
+                />
+              </div>
+
               <div>
                 <input
                   type="text"

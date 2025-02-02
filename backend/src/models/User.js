@@ -2,6 +2,13 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
+  username: {
+    type: String,
+    required: [true, 'Please provide a username'],
+    unique: true,
+    trim: true,
+    minlength: [3, 'Username must be at least 3 characters long'],
+  },
   name: {
     type: String,
     required: [true, 'Please provide your name'],
@@ -25,11 +32,19 @@ const userSchema = new mongoose.Schema({
   },
   profilePicture: {
     type: String,
-    default: null
+    default: '/uploads/profiles/default-avatar.png'
   },
   bio: {
     type: String,
     maxlength: [150, 'Bio cannot be more than 150 characters'],
+    default: ''
+  },
+  location: {
+    type: String,
+    default: ''
+  },
+  website: {
+    type: String,
     default: ''
   },
   followers: [{
@@ -40,6 +55,29 @@ const userSchema = new mongoose.Schema({
     type: mongoose.Schema.ObjectId,
     ref: 'User'
   }],
+  recentSearches: [{
+    type: mongoose.Schema.ObjectId,
+    ref: 'User'
+  }],
+  socialLinks: {
+    behance: String,
+    pinterest: String,
+    portfolio: String
+  },
+  stats: {
+    postsCount: {
+      type: Number,
+      default: 0
+    },
+    followersCount: {
+      type: Number,
+      default: 0
+    },
+    followingCount: {
+      type: Number,
+      default: 0
+    }
+  },
   isVerified: {
     type: Boolean,
     default: false
@@ -75,6 +113,17 @@ userSchema.methods.comparePassword = async function(candidatePassword) {
     throw new Error('Error comparing passwords');
   }
 };
+
+// Update stats when followers/following changes
+userSchema.pre('save', function(next) {
+  if (this.isModified('followers')) {
+    this.stats.followersCount = this.followers.length;
+  }
+  if (this.isModified('following')) {
+    this.stats.followingCount = this.following.length;
+  }
+  next();
+});
 
 const User = mongoose.model('User', userSchema);
 

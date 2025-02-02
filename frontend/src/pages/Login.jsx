@@ -22,21 +22,21 @@ export default function Login() {
     e.preventDefault();
     setLoading(true);
 
-    const result = await login(formData.email, formData.password);
-    
-    if (result.success) {
-      toast.success('Login successful!');
-      navigate('/');
-    } else {
-      toast.error(result.error);
+    try {
+      const success = await login(formData);
+      if (success) {
+        navigate('/');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+    } finally {
+      setLoading(false);
     }
-    
-    setLoading(false);
   };
 
   return (
     <div className="min-h-screen flex bg-gray-900">
-      {/* Left side - Image and Text */}
+      {/* Left side - Image */}
       <div className="hidden lg:flex lg:w-1/2 relative overflow-hidden">
         {/* Background Image with Gradient Overlay */}
         <div 
@@ -50,7 +50,7 @@ export default function Login() {
         >
           <div className="absolute inset-0 bg-gradient-to-b from-purple-600/30 to-gray-900/90"></div>
         </div>
-        
+
         {/* Content */}
         <div className="relative w-full p-12 flex flex-col justify-between text-white z-10">
           <div>
@@ -66,6 +66,7 @@ export default function Login() {
               <div className="w-2 h-2 bg-white rounded-full opacity-50"></div>
             </div>
           </div>
+
           <div>
             <Link to="/" className="text-sm hover:underline transition-all duration-200">
               Back to website

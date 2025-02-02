@@ -1,105 +1,98 @@
 import { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import api from '../utils/axios';
+import toast from 'react-hot-toast';
 
 const AuthContext = createContext();
 
-// Create axios instance with default config
-const api = axios.create({
-  baseURL: 'http://localhost:5000',
-  withCredentials: true,
-  headers: {
-    'Content-Type': 'application/json'
-  }
-});
+export function useAuth() {
+  return useContext(AuthContext);
+}
 
-export const AuthProvider = ({ children }) => {
+export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem('token');
-    if (token) {
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      fetchUserData();
-    }
-    setLoading(false);
+    checkAuth();
   }, []);
 
-  const fetchUserData = async () => {
+  const checkAuth = async () => {
     try {
-      const response = await api.get('/api/auth/me');
-      setUser(response.data.data.user);
+      const token = localStorage.getItem('token');
+      if (token) {
+        const response = await api.get('/auth/me');
+        setUser(response.data.data.user);
+      }
     } catch (error) {
-      console.error('Error fetching user data:', error);
-      logout();
+      console.error('Auth check error:', error);
+      localStorage.removeItem('token');
+      setUser(null);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const login = async (email, password) => {
+  const updateUser = async (userData) => {
     try {
-      const response = await api.post('/api/auth/login', {
-        email,
-        password,
-      });
-      
-      const { token, data: { user } } = response.data;
-      localStorage.setItem('token', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      setUser(user);
-      return { success: true };
+      setUser(userData);
     } catch (error) {
-      console.error('Login error:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || 'An error occurred during login'
-      };
+      console.error('Error updating user:', error);
+      toast.error('Failed to update user information');
     }
   };
 
-  const register = async (name, email, password) => {
+  const register = async (userData) => {
     try {
-      const formData = new FormData();
-      formData.append('name', name);
-      formData.append('email', email);
-      formData.append('password', password);
-
-      const response = await api.post('/api/auth/register', formData);
-      
+      const response = await api.post('/auth/register', userData);
       const { token, data: { user } } = response.data;
       localStorage.setItem('token', token);
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
       setUser(user);
-      return { success: true };
+      toast.success('Registration successful!');
+      return true;
     } catch (error) {
       console.error('Registration error:', error);
-      return {
-        success: false,
-        error: error.response?.data?.message || 'An error occurred during registration'
-      };
+      toast.error(error.message || 'Registration failed');
+      return false;
+    }
+  };
+
+  const login = async (credentials) => {
+    try {
+      const response = await api.post('/auth/login', credentials);
+      const { token, data: { user } } = response.data;
+      localStorage.setItem('token', token);
+      setUser(user);
+      toast.success('Login successful!');
+      return true;
+    } catch (error) {
+      console.error('Login error:', error);
+      toast.error(error.message || 'Login failed');
+      return false;
     }
   };
 
   const logout = () => {
     localStorage.removeItem('token');
-    delete api.defaults.headers.common['Authorization'];
     setUser(null);
+    toast.success('Logged out successfully');
+  };
+
+  const value = {
+    user,
+    setUser: updateUser,
+    loading,
+    login,
+    register,
+    logout
   };
 
   if (loading) {
-    return null;
+    return null; // or a loading spinner
   }
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout }}>
+    <AuthContext.Provider value={value}>
       {children}
     </AuthContext.Provider>
   );
-};
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
-};
+}
